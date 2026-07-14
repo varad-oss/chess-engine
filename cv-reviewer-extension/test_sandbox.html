@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CV Reviewer Extension Sandbox</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #0f172a;
+      color: #e2e8f0;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #818cf8;
+      border-bottom: 2px solid #334155;
+      padding-bottom: 10px;
+    }
+    .instructions {
+      background-color: #1e293b;
+      border-left: 4px solid #818cf8;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 30px;
+    }
+    ol {
+      margin-left: 20px;
+      padding-left: 0;
+    }
+    li {
+      margin-bottom: 8px;
+    }
+    code {
+      background-color: #0f172a;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #f472b6;
+      font-family: monospace;
+    }
+    .form-group {
+      margin-bottom: 24px;
+      background-color: #1e293b;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+    }
+    label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 8px;
+      color: #94a3b8;
+    }
+    textarea {
+      width: 100%;
+      background-color: #0f172a;
+      color: #e2e8f0;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      box-sizing: border-box;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: #818cf8;
+    }
+  </style>
+</head>
+<body>
+  <h1>CV Reviewer Extension Sandbox</h1>
+  
+  <div class="instructions">
+    <h3>🚀 How to Load and Test the Extension:</h3>
+    <ol>
+      <li>Open Google Chrome and navigate to <code>chrome://extensions/</code></li>
+      <li>In the top-right corner, toggle the <strong>Developer mode</strong> switch to <strong>ON</strong>.</li>
+      <li>In the top-left corner, click the <strong>Load unpacked</strong> button.</li>
+      <li>Select the folder: <code>cv-reviewer-extension</code> located in your workspace.</li>
+      <li>Pin the extension in your toolbar and click its icon to configure your <strong>Gemini</strong> or <strong>OpenAI API Key</strong>.</li>
+      <li>Return to this page, type a resume draft bullet point in any of the fields below, and hover/click the floating <strong>Analyze</strong> button that appears at the bottom-right of the textarea.</li>
+    </ol>
+  </div>
+
+  <form>
+    <div class="form-group">
+      <label for="bullet-1">Resume Bullet Point 1 (Software Engineering Experience)</label>
+      <textarea id="bullet-1" rows="4" placeholder="I was responsible for helping write some C++ code to make the server database run faster."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="bullet-2">Resume Bullet Point 2 (Leadership & Extracurriculars)</label>
+      <textarea id="bullet-2" rows="4" placeholder="I led a team of students to organize a coding event where we helped 100 people learn React."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="bullet-3">Resume Bullet Point 3 (Quant / Finance Research)</label>
+      <textarea id="bullet-3" rows="4" placeholder="Worked on developing a python model that forecasts stock price changes."></textarea>
+    </div>
+  </form>
+</body>
+</html>

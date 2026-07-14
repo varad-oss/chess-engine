@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "CV Impact Reviewer",
+  "version": "1.0.0",
+  "description": "Real-time CV bullet point optimizer for FAANG, Quant, and Investment Banking roles.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.openai.com/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

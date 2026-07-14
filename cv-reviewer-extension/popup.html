@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CV Impact Reviewer</title>
+  <link rel="stylesheet" href="popup.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-area">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="url(#logo-grad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <defs>
+            <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#818cf8" />
+              <stop offset="100%" stop-color="#34d399" />
+            </linearGradient>
+          </defs>
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        </svg>
+        <h1>CV Impact Reviewer</h1>
+      </div>
+      <span class="badge">MV3</span>
+    </header>
+
+    <!-- Main Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="nav-btn active" data-tab="settings">Settings</button>
+      <button class="nav-btn" data-tab="sandbox">Playground</button>
+      <button class="nav-btn" data-tab="stats">Performance</button>
+    </nav>
+
+    <!-- Tab Contents -->
+    <main class="tab-contents">
+      <!-- Settings Tab -->
+      <section class="tab-pane active" id="settings-tab">
+        <div class="card">
+          <h2 class="card-title">LLM Credentials</h2>
+          <p class="card-desc">Configure your preferred AI model provider and securely store your API keys.</p>
+          
+          <div class="form-group">
+            <label for="provider-select">AI Provider</label>
+            <select id="provider-select" class="form-control">
+              <option value="gemini">Google Gemini API (Recommended)</option>
+              <option value="openai">OpenAI API</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="model-select">Model Version</label>
+            <select id="model-select" class="form-control">
+              <!-- Dynamically populated based on provider -->
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="api-key-input">API Key</label>
+            <div class="input-password-wrapper">
+              <input type="password" id="api-key-input" class="form-control" placeholder="Enter API Key...">
+              <button id="toggle-key-visibility" class="icon-btn" title="Toggle visibility">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+            </div>
+            <div id="key-help" class="help-text">Keys are stored locally in your browser storage.</div>
+          </div>
+
+          <button id="save-settings-btn" class="btn btn-primary">Save Settings</button>
+          <div id="save-status" class="toast-status">Saved successfully!</div>
+        </div>
+      </section>
+
+      <!-- Playground Tab -->
+      <section class="tab-pane" id="sandbox-tab">
+        <div class="card">
+          <h2 class="card-title">Bullet Sandbox</h2>
+          <p class="card-desc">Test and preview CV bullet rewrites before exporting them to your application portals.</p>
+
+          <div class="form-group">
+            <label for="sandbox-textarea">Input Draft Bullet</label>
+            <textarea id="sandbox-textarea" class="form-control" rows="3" placeholder="helped build a web app to make search query execution faster..."></textarea>
+          </div>
+
+          <button id="sandbox-optimize-btn" class="btn btn-primary">Optimize Bullet</button>
+
+          <div class="output-wrapper" id="sandbox-output-wrapper">
+            <label>FAANG Bullet Outcome</label>
+            <div class="sandbox-result-box" id="sandbox-result">
+              Your optimized bullet point will show up here.
+            </div>
+            <button id="sandbox-copy-btn" class="btn btn-secondary" style="margin-top: 8px; display: none;">Copy to Clipboard</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Stats Tab -->
+      <section class="tab-pane" id="stats-tab">
+        <div class="card stats-card">
+          <h2 class="card-title">Impact Insights</h2>
+          <p class="card-desc">Monitor your resume optimization history and accomplishments.</p>
+
+          <div class="grid-stats">
+            <div class="stat-box">
+              <span class="stat-number" id="stats-total-checked">0</span>
+              <span class="stat-label">Bullets Scanned</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-number" id="stats-verbs-upgraded">0</span>
+              <span class="stat-label">Verbs Upgraded</span>
+            </div>
+          </div>
+
+          <div class="impact-level-card">
+            <div class="level-indicator">
+              <span class="level-title">Elite Formatting Score</span>
+              <span class="level-value" id="stats-score-percent">0%</span>
+            </div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" id="stats-progress-fill" style="width: 0%;"></div>
+            </div>
+            <p class="help-text" style="margin-top: 8px;">Scan more bullet points and upgrade verbs to reach Elite Candidate Level.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>Elevating careers one bullet point at a time.</p>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
