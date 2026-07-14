@@ -1,6 +1,6 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
-# Antigravity Chess Engine & Visual AI Playroom
+# Chess Engine 
 
 A complete, high-performance, professional-grade chess engine written in C++17 from scratch. It uses 64-bit bitboards, magic bitboard attack tables, Negamax search with alpha-beta pruning, quiescence search, and transposition tables. It features a built-in BSD socket HTTP server, allowing browser-based chess frontends to query the AI directly.
 
