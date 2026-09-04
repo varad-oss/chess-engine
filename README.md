@@ -21,7 +21,7 @@ Run the compiled executable with the `--server` flag to launch the engine as a l
 This spins up a lightweight TCP server using macOS-native BSD sockets, listening for HTTP `POST /move` payloads containing JSON FEN states (e.g. `{"fen": "rnbqk..."}`). It responds with JSON moves (e.g. `{"move": "e2e4"}`) and handles CORS headers automatically.
 
 ### 3. How to Open the UI in a Browser
-Open `index.html` directly in any browser (Safari, Chrome, Firefox). No build step, node modules, or external web servers are required.
+Open `frontend/index.html` directly in any browser (Safari, Chrome, Firefox). No build step, node modules, or external web servers are required.
 - **Opponent Modes**: Choose **C++ Local Server** to play against the compiled C++ AI, or **JS Fallback Engine** to play offline (it runs a random move picker based on a complete rules validator written in vanilla JS).
 - **Game Analyser**: At any point, toggle the "Game Analyser" to browse historical moves without breaking the live engine state.
 

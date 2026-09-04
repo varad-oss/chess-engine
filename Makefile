@@ -2,27 +2,28 @@
 # Target C++17 with -O2 optimization for peak search performance
 
 CXX = g++
-CXXFLAGS = -std=c++17 -O2 -Wall -Wextra
+CXXFLAGS = -std=c++17 -O2 -Wall -Wextra -Iinclude
 
-# Source and object files
-SRCS = main.cpp Board.cpp Move.cpp MoveGen.cpp Eval.cpp Search.cpp UCI.cpp
-OBJS = $(SRCS:.cpp=.o)
+# Source files
+SRCS = src/main.cpp src/Board.cpp src/Move.cpp src/MoveGen.cpp src/Eval.cpp src/Search.cpp src/UCI.cpp
+OBJS = $(SRCS:src/%.cpp=build/%.o)
 TARGET = chess
 
 # Default target
-all: $(TARGET)
+all: build $(TARGET)
+
+# Create build directory if it doesn't exist
+build:
+	mkdir -p build
 
 # Link object files to create target binary
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS)
 
-# Compile C++ source files to object files
-%.o: %.cpp
+# Compile C++ source files to object files in the build directory
+build/%.o: src/%.cpp | build
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Clean target to remove compiled binaries and object files
 clean:
-	rm -f $(OBJS) $(TARGET)
-
-# Print confirmation message at the end of the file.
-# Confirmation: Makefile created successfully.
+	rm -rf build $(TARGET)
