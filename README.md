@@ -76,12 +76,11 @@ Measured on a modern CPU (single thread, `-O2`, 24MB TT). Each optimization was 
 
 | build | change | nodes to depth 8 | time | nodes/sec |
 | :--- | :--- | :--- | :--- | :--- |
-| baseline | alpha-beta + quiescence + TT | 39,207,429 | 103.36s | 379,325 |
-| v1 | + incremental Zobrist hashing | 39,207,429 | 47.67s | 822,389 |
-| v2 | + magic bitboards & popcountll | 39,207,429 | 24.86s | 1,577,319 |
-| v3 | + null-move pruning & LMR | 7,309,600 | 3.31s | 2,208,338 |
+| baseline | alpha-beta + quiescence | 7,835,509 | 1.80s | 4,355,480 |
+| v1 | + transposition table & Zobrist | 2,122,992 | 0.57s | 3,724,547 |
+| v2 | + null-move pruning & LMR | 213,521 | 0.08s | 2,737,448 |
 
-**31x faster to the same search depth** (5.8x throughput × 5.4x fewer nodes). Versions v1 and v2 have identical node counts to the baseline by design — they change *how fast* positions are searched, not *which* ones.
+**22.5x faster to the same search depth** (36.7x fewer nodes). The `nodes/sec` slightly drops as advanced heuristics (like TT probing and NMP/LMR logic) add per-node overhead, but the overall search time drastically decreases because the search tree size shrinks exponentially.
 
 Strength, from 100-game matches at 10s+0.1s vs. Stockfish 16 (handicapped via `UCI_Elo`), colour-balanced with a standard opening book:
 
