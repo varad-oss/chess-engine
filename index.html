@@ -1031,6 +1031,7 @@
         let isAnimating = false;
         let isAnalysisMode = false;
         let analysisIndex = -1;
+        let isEngineThinking = false; // Guard against re-entrant engine calls
 
         const boardEl = document.getElementById("board");
         const statusEl = document.getElementById("status");
@@ -1172,7 +1173,7 @@
 
         function handleSquareClick(sq) {
             const userColor = document.getElementById("play-as").value;
-            if (game.sideToMove !== userColor || isAnimating || isAnalysisMode) return; 
+            if (game.sideToMove !== userColor || isAnimating || isAnalysisMode || isEngineThinking) return; 
 
             const clickedPiece = game.board[sq];
             const matchingMove = activeLegalMoves.find(m => m.to === sq);
@@ -1200,12 +1201,16 @@
         }
 
         async function triggerEngineMove() {
-            if (isAnalysisMode) return;
+            if (isAnalysisMode || isEngineThinking) return;
+            isEngineThinking = true;
+
             statusEl.innerHTML = "Engine thinking...";
             statusEl.className = "status-panel status-thinking";
             statusEl.style.color = "";
 
             const allLegal = game.generateLegalMoves();
+            if (allLegal.length === 0) { isEngineThinking = false; return; }
+
             const mode = opponentSelect.value;
             let chosenMove = null;
 
@@ -1216,21 +1221,49 @@
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ fen: game.generateFen() })
                     });
-                    if (!response.ok) throw new Error("Server error");
+                    if (!response.ok) throw new Error(`Server returned ${response.status}`);
                     const data = await response.json();
                     const uci = data.move;
-                    chosenMove = allLegal.find(m => {
-                        return m.from === (uci.charCodeAt(0) - 97) + (uci.charCodeAt(1) - 49) * 8 &&
-                               m.to === (uci.charCodeAt(2) - 97) + (uci.charCodeAt(3) - 49) * 8 &&
-                               (!m.promo || m.promo === uci[4]);
-                    });
-                } catch (e) {
-                    console.error("C++ Server unreachable.", e);
-                    opponentSelect.value = "fallback";
-                }
-            }
+                    if (!uci || uci.length < 4) throw new Error("Bad move string from server");
 
-            if (!chosenMove) {
+                    // Decode UCI: e.g. "e2e4" => from=12, to=28
+                    const fromFile = uci.charCodeAt(0) - 97; // a=0 .. h=7
+                    const fromRank = uci.charCodeAt(1) - 49; // 1=0 .. 8=7
+                    const toFile   = uci.charCodeAt(2) - 97;
+                    const toRank   = uci.charCodeAt(3) - 49;
+                    const fromSq = fromRank * 8 + fromFile;
+                    const toSq   = toRank   * 8 + toFile;
+                    const promoChar = uci.length > 4 ? uci[4] : null;
+
+                    // Find matching legal move (exact match including promo)
+                    chosenMove = allLegal.find(m =>
+                        m.from === fromSq && m.to === toSq &&
+                        (!promoChar || m.promo === promoChar)
+                    );
+
+                    // If promo matching failed, try without promo filter (default to queen)
+                    if (!chosenMove && promoChar) {
+                        chosenMove = allLegal.find(m =>
+                            m.from === fromSq && m.to === toSq && m.promo === 'q'
+                        );
+                    }
+
+                    if (!chosenMove) {
+                        console.error(`[Engine] Server returned move ${uci} (from=${fromSq} to=${toSq}) not found in legal moves:`,
+                            allLegal.map(m => `${m.from}->${m.to}${m.promo?'='+m.promo:''}` ));
+                        throw new Error(`Move ${uci} not in legal move list`);
+                    }
+
+                } catch (e) {
+                    console.error("[Engine] C++ Server error:", e.message);
+                    // Show error but DO NOT permanently change the dropdown — user keeps their Elo setting
+                    statusEl.innerHTML = `⚠️ Engine error: ${e.message}. Is './chess --server --port 8765' running?`;
+                    statusEl.style.color = "#ef4444";
+                    isEngineThinking = false;
+                    return; // Do NOT play a random move — abort cleanly
+                }
+            } else {
+                // JS fallback: pick a random legal move (1000 Elo mode)
                 const randomIndex = Math.floor(Math.random() * allLegal.length);
                 chosenMove = allLegal[randomIndex];
             }
@@ -1241,12 +1274,15 @@
                     lastPlayedMove = chosenMove;
                     renderBoard();
                     updateHistoryPanel();
+                    isEngineThinking = false;
                     if (!checkGameEndState()) {
                         statusEl.innerHTML = "System Ready";
                         statusEl.className = "status-panel status-active";
                         statusEl.style.color = "";
                     }
                 });
+            } else {
+                isEngineThinking = false;
             }
         }
 

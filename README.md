@@ -1,6 +1,4 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-# Chess Engine 
+# Chess Engine — Antigravity AI Playroom
 
 A complete, high-performance, professional-grade chess engine written in C++17 from scratch. It uses 64-bit bitboards, magic bitboard attack tables, Negamax search with alpha-beta pruning, quiescence search, and transposition tables. It features a built-in BSD socket HTTP server, allowing browser-based chess frontends to query the AI directly.
 
@@ -38,17 +36,17 @@ Here is the complete list of technical concepts implemented in this engine (play
 - **Alien Theme Aesthetics**: Hand-crafted SVG vectors dynamically rendered via Data URIs, deep space CSS variables, and glowing borders, providing a premium, alien-themed UX without external asset loading.
 - **Interactive Game Analyser**: Built-in state machine allowing users to rewind the board visually by clicking through the Move History log. Integrates cleanly with live engine evaluation states.
 
-### 1. Board Representation & State
+### 2. Board Representation & State
 - **64-bit Bitboards**: Maps the layout of each piece type and color to a `uint64_t` bitmask. Allows ultra-fast bitwise operations to check occupancy and attacks.
 - **Incremental Zobrist Hashing**: Encodes the board layout, active player, castling rights, and en passant file into a single 64-bit hash. Maintained incrementally during moves via `XOR` operations to achieve high cache efficiency.
 - **FEN Parser/Generator**: Full string serialization to ingest FEN inputs (e.g., for puzzle solving) and output current state strings for network transmission.
 
-### 2. Move Generation (Perfect Legality)
+### 3. Move Generation (Perfect Legality)
 - **Magic Bitboards**: Implements bishop, rook, and queen sliding attacks by multiplying diagonal/file occupancy masks by pre-verified magic numbers and shifting to index precomputed lookup tables (size: ~107KB total).
 - **Attack Lookup Tables**: Precomputed lookup bitboards for Knights and King generated at startup to perform instant attack checks.
 - **Move Legality Filtering**: Generates pseudo-legal moves, executes them, verifies that the moving side's king is not attacked (`is_square_attacked`), and reverts. This ensures 100% legal moves under checkmate, stalemate, and pins. Passes standard correctness perfts (`4,865,609` nodes at Depth 5 on starting FEN).
 
-### 3. Positional Evaluation Heuristics
+### 4. Positional Evaluation Heuristics
 - **Material Evaluation**: Centipawn weights (Pawn: 100, Knight: 320, Bishop: 330, Rook: 500, Queen: 900, King: 20000).
 - **Piece-Square Tables (PST)**: Coordinates positional scores dynamically. Mirrors Black's coordinates vertically via a fast rank-flipping bitmask (`sq ^ 56`).
 - **Pawn Structure Checkers**: Detects and penalizes doubled pawns (`-15` per file) and isolated pawns (`-20` per pawn with no neighbors).
@@ -57,7 +55,7 @@ Here is the complete list of technical concepts implemented in this engine (play
 - **King Safety**: Middlegame shield checking (penalizes `-20` per missing pawn in front of castled kings). Transition to endgame toggles a centralized King PST.
 - **Mobility Counting**: Calculates the maneuverability of pieces using static bit-counting approximations (`__builtin_popcountll` on pseudo-legal attack bitboards) resulting in up to a **50x speedup** in evaluation throughput over traditional move generation counting.
 
-### 4. Search Optimizations
+### 5. Search Optimizations
 - **Iterative Deepening**: Progressively searches from Depth 1 up to target depth. Allows real-time search statistics printing and populates the Transposition Table early to guide deeper searches.
 - **Negamax with Alpha-Beta Pruning**: Prunes unpromising branches early using alpha/beta bounds.
 - **Null Move Pruning (NMP)**: Forfeits the turn to simulate a "null move"; if the resulting evaluation still causes a beta cutoff, the branch is entirely pruned, vastly increasing search depth in solid positions.
@@ -67,11 +65,29 @@ Here is the complete list of technical concepts implemented in this engine (play
 - **Move Ordering**: Sorts moves using selection sort on the fly to maximize cutoffs: TT move > captures (MVV-LVA) > promotions > killer moves (quiet moves causing cutoffs) > history heuristic.
 - **Time Controller**: Periodic polling of the system clock (every 2,048 nodes) to abort search immediately when time limits are reached.
 
-### 5. Server Architecture
+### 6. Server Architecture
 - **BSD Socket HTTP Server**: Custom low-level socket listening, request buffering, HTTP header parsing, and CORS pre-flight handshake (`OPTIONS` method) handling. Resolves FEN queries synchronously and returns JSON payload responses.
-=======
-# chess-engine
->>>>>>> b805ccf6a8258362f4c6954e04eb1331b6dc0d88
-=======
 
->>>>>>> 362d3d57c268cb2783e755a7d0f6eeefe25f7d72
+---
+
+## Benchmarking
+
+Measured on a modern CPU (single thread, `-O2`, 24MB TT). Each optimization was built and benchmarked in isolation so the performance gains are strictly attributable:
+
+| build | change | nodes to depth 8 | time | nodes/sec |
+| :--- | :--- | :--- | :--- | :--- |
+| baseline | alpha-beta + quiescence + TT | 39,207,429 | 103.36s | 379,325 |
+| v1 | + incremental Zobrist hashing | 39,207,429 | 47.67s | 822,389 |
+| v2 | + magic bitboards & popcountll | 39,207,429 | 24.86s | 1,577,319 |
+| v3 | + null-move pruning & LMR | 7,309,600 | 3.31s | 2,208,338 |
+
+**31x faster to the same search depth** (5.8x throughput × 5.4x fewer nodes). Versions v1 and v2 have identical node counts to the baseline by design — they change *how fast* positions are searched, not *which* ones.
+
+Strength, from 100-game matches at 10s+0.1s vs. Stockfish 16 (handicapped via `UCI_Elo`), colour-balanced with a standard opening book:
+
+| metric | result |
+| :--- | :--- |
+| baseline rating | ~1750–1850 |
+| current rating | **~2160** — 44.5% vs. Stockfish @2200 (+43 −54 =3) |
+| null-move pruning, direct A/B | **+117 Elo** [+77, +161] over 200 games, LOS 100% |
+| move-match vs. Stockfish | 37.4% at matched depth 8 (a diagnostic, not a strength metric) |
