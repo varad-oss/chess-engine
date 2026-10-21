@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Antigravity Chess Engine</title>
+    <title>Chess Engine</title>
     <style>
         :root {
             --bg-color: #090A0F;
@@ -423,10 +423,12 @@
             <div id="status" class="status-panel">System Ready</div>
 
             <div class="controls">
-                <label for="opponent" style="color: var(--accent-color);">Select Opponent</label>
-                <select id="opponent">
-                    <option value="server">Zorgon (C++ 2000 Elo)</option>
-                    <option value="fallback" selected>Glip (JS 1000 Elo)</option>
+                <label for="think-time" style="color: var(--accent-color);">Engine think time</label>
+                <select id="think-time">
+                    <option value="100">0.1 s per move</option>
+                    <option value="500">0.5 s per move</option>
+                    <option value="1000" selected>1 s per move</option>
+                    <option value="3000">3 s per move</option>
                 </select>
 
                 <label for="play-as" style="color: var(--text-color); margin-top: 5px;">Play As</label>
@@ -1036,7 +1038,13 @@
         const boardEl = document.getElementById("board");
         const statusEl = document.getElementById("status");
         const historyListEl = document.getElementById("history-list");
-        const opponentSelect = document.getElementById("opponent");
+        const thinkTimeSelect = document.getElementById("think-time");
+        const ENGINE_URL = "http://127.0.0.1:8765/move";
+        const DRAW_MESSAGES = {
+            draw_repetition: "Draw — threefold repetition",
+            draw_fifty_moves: "Draw — fifty-move rule",
+            draw_insufficient_material: "Draw — insufficient material"
+        };
         const resetBtn = document.getElementById("reset-btn");
         const analyserBtn = document.getElementById("analyser-btn");
 
@@ -1149,6 +1157,11 @@
         }
 
         // Check if the current player has no moves left
+        function toUci(m) {
+            const sq = i => COLUMNS[i % 8] + RANKS[Math.floor(i / 8)];
+            return sq(m.from) + sq(m.to) + (m.promo ? m.promo.toLowerCase() : "");
+        }
+
         function checkGameEndState() {
             const legalMoves = game.generateLegalMoves();
             if (legalMoves.length === 0) {
@@ -1159,8 +1172,9 @@
                 const isCheck = game.isSquareAttacked(kingSq, opponent);
                 
                 if (isCheck) {
-                    statusEl.innerHTML = us === 'w' ? "Checkmate — Black wins!" : "Checkmate — you win!";
-                    statusEl.style.color = us === 'w' ? "#ef4444" : "#10b981";
+                    const userLost = us === document.getElementById("play-as").value;
+                    statusEl.innerHTML = userLost ? "Checkmate — the engine wins" : "Checkmate — you win!";
+                    statusEl.style.color = userLost ? "#ef4444" : "#10b981";
                 } else {
                     statusEl.innerHTML = "Draw — Stalemate";
                     statusEl.style.color = "#94a3b8";
@@ -1211,61 +1225,35 @@
             const allLegal = game.generateLegalMoves();
             if (allLegal.length === 0) { isEngineThinking = false; return; }
 
-            const mode = opponentSelect.value;
+            // Send the whole game, not just the current FEN, so the engine can
+            // see repetitions. The body uses the UCI "position" grammar.
+            const moveList = game.history.map(h => toUci(h.move)).join(" ");
+            const body = "startpos" + (moveList ? " moves " + moveList : "");
             let chosenMove = null;
-
-            if (mode === 'server') {
-                try {
-                    const response = await fetch("http://localhost:8765/move", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ fen: game.generateFen() })
-                    });
-                    if (!response.ok) throw new Error(`Server returned ${response.status}`);
-                    const data = await response.json();
-                    const uci = data.move;
-                    if (!uci || uci.length < 4) throw new Error("Bad move string from server");
-
-                    // Decode UCI: e.g. "e2e4" => from=12, to=28
-                    const fromFile = uci.charCodeAt(0) - 97; // a=0 .. h=7
-                    const fromRank = uci.charCodeAt(1) - 49; // 1=0 .. 8=7
-                    const toFile   = uci.charCodeAt(2) - 97;
-                    const toRank   = uci.charCodeAt(3) - 49;
-                    const fromSq = fromRank * 8 + fromFile;
-                    const toSq   = toRank   * 8 + toFile;
-                    const promoChar = uci.length > 4 ? uci[4] : null;
-
-                    // Find matching legal move (exact match including promo)
-                    chosenMove = allLegal.find(m =>
-                        m.from === fromSq && m.to === toSq &&
-                        (!promoChar || m.promo === promoChar)
-                    );
-
-                    // If promo matching failed, try without promo filter (default to queen)
-                    if (!chosenMove && promoChar) {
-                        chosenMove = allLegal.find(m =>
-                            m.from === fromSq && m.to === toSq && m.promo === 'q'
-                        );
-                    }
-
-                    if (!chosenMove) {
-                        console.error(`[Engine] Server returned move ${uci} (from=${fromSq} to=${toSq}) not found in legal moves:`,
-                            allLegal.map(m => `${m.from}->${m.to}${m.promo?'='+m.promo:''}` ));
-                        throw new Error(`Move ${uci} not in legal move list`);
-                    }
-
-                } catch (e) {
-                    console.error("[Engine] C++ Server error:", e.message);
-                    // Show error but DO NOT permanently change the dropdown — user keeps their Elo setting
-                    statusEl.innerHTML = `⚠️ Engine error: ${e.message}. Is './chess --server --port 8765' running?`;
-                    statusEl.style.color = "#ef4444";
+            let reply = null;
+            try {
+                const response = await fetch(`${ENGINE_URL}?movetime=${thinkTimeSelect.value}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "text/plain" },
+                    body
+                });
+                reply = await response.json();
+                if (!response.ok) throw new Error(reply.error || `server returned ${response.status}`);
+                if (!reply.bestmove) {
+                    // The user's move ended the game in a way the board UI does not detect.
+                    statusEl.textContent = DRAW_MESSAGES[reply.status] || `Game over (${reply.status})`;
+                    statusEl.className = "status-panel";
                     isEngineThinking = false;
-                    return; // Do NOT play a random move — abort cleanly
+                    return;
                 }
-            } else {
-                // JS fallback: pick a random legal move (1000 Elo mode)
-                const randomIndex = Math.floor(Math.random() * allLegal.length);
-                chosenMove = allLegal[randomIndex];
+                chosenMove = allLegal.find(m => toUci(m) === reply.bestmove);
+                if (!chosenMove) throw new Error(`engine move ${reply.bestmove} is not legal here`);
+            } catch (e) {
+                console.error("[engine]", e);
+                statusEl.textContent = `⚠️ Engine error: ${e.message}. Is './build/release/chess-engine serve' running?`;
+                statusEl.style.color = "#ef4444";
+                isEngineThinking = false;
+                return;
             }
 
             if (chosenMove) {
@@ -1276,7 +1264,11 @@
                     updateHistoryPanel();
                     isEngineThinking = false;
                     if (!checkGameEndState()) {
-                        statusEl.innerHTML = "System Ready";
+                        const score = reply.score.type === "mate"
+                            ? `mate ${reply.score.value}`
+                            : `${(reply.score.value / 100).toFixed(2)} pawns`;
+                        statusEl.textContent = DRAW_MESSAGES[reply.status] ||
+                            `Engine: ${reply.bestmove} (${score} for the engine, depth ${reply.depth}, ${reply.nodes.toLocaleString()} nodes)`;
                         statusEl.className = "status-panel status-active";
                         statusEl.style.color = "";
                     }

@@ -1,92 +1,170 @@
-# Chess Engine — Antigravity AI Playroom
+# Chess Engine
 
-A complete, high-performance, professional-grade chess engine written in C++17 from scratch. It uses 64-bit bitboards, magic bitboard attack tables, Negamax search with alpha-beta pruning, quiescence search, and transposition tables. It features a built-in BSD socket HTTP server, allowing browser-based chess frontends to query the AI directly.
+A UCI chess engine in C++20, built around one rule: **every claim about it is
+backed by a check you can run.** The move generator is verified by perft, the
+evaluation weights are fitted to self-play data by an in-repo Texel tuner, and
+every strength claim comes from an in-repo match runner with SPRT statistics.
 
----
+This is version 2, a ground-up rewrite. [docs/AUDIT.md](docs/AUDIT.md)
+documents what was wrong with version 1, and [docs/DESIGN.md](docs/DESIGN.md)
+explains the design.
 
-## Getting Started
+## Results at a glance
 
-### 1. How to Compile the C++ Engine
-A `Makefile` is provided in the project root. Build the binary using:
+All numbers were measured on an Apple M5 (4 performance + 6 efficiency cores)
+with the commands in [docs/RESULTS.md](docs/RESULTS.md).
+
+| what | result |
+| --- | --- |
+| Move generation | perft suite: 21 positions, 51 depth entries, 640M leaf nodes, all exact |
+| Perft speed vs v1 | 3.0x faster like-for-like; 17.5x with bulk counting (start position, depth 6) |
+| Strength vs v1 | **+200 −0 =0** at equal time; **+193 −1 =6** with v1 given 10x the time |
+| Evaluation tuning | **+117.9 ± 41.0 Elo** over the hand-set weights (SPRT accepted, 209 games) |
+| Rejected changes | continuation history (+7.5 ± 10.5, SPRT inconclusive at 2,000 games); a second tuning round (failed an eval sanity check) |
+| Lazy SMP | 4 threads reach depth 18 1.7x faster; nodes/s scale 3.2x |
+| UCI conformance | 9/9 protocol integration tests (v1: 2/9) |
+| Tests | 30 unit-test cases (~400k checks), 17 integration tests, all passing |
+| Sanitizers | clean under ASan + UBSan and ThreadSanitizer (4-thread search) |
+| Bench signature | 1,707,612 nodes (`chess-engine bench`) |
+
+## Features
+
+* **Rules core**: bitboards + mailbox, magic bitboards (embedded multipliers
+  re-verified at startup), strictly legal move generation (pin and check
+  masks, no make/unmake filtering), incremental Zobrist hashing with canonical
+  en-passant, threefold/fifty-move/insufficient-material detection, static
+  exchange evaluation, `gives_check`.
+* **Search**: iterative deepening, aspiration windows, principal variation
+  search, check extension, mate-distance pruning, reverse futility pruning,
+  null-move pruning (zugzwang-guarded), internal iterative reduction,
+  late-move reductions with re-search, late-move/futility/SEE pruning,
+  quiescence search with SEE filtering and full check evasions, killer moves,
+  history heuristic with gravity.
+* **Parallel search**: Lazy SMP over a lockless transposition table that uses
+  relaxed atomics, so it is free of data races and clean under ThreadSanitizer.
+* **Evaluation**: tapered (middlegame/endgame) evaluation with material,
+  piece-square tables, mobility, pawn structure, king safety and more: 485
+  (mg, eg) weight pairs fitted by `tools/tune` (weights with too little
+  data keep their prior value).
+* **UCI**: the search runs on its own thread, so `stop`, `isready` and `quit`
+  work mid-search. Options: `Hash`, `Threads`, `Move Overhead`, `Clear Hash`.
+* **Tooling**: `bench`, `perft`, `perft-suite`, `datagen` (self-play training
+  data), `openings` (balanced opening book), `serve` (local HTTP API for the
+  browser demo), plus `tools/match` (engine-vs-engine matches with SPRT) and
+  `tools/tune` (Texel tuner).
+
+## Building
+
+Requires a C++20 compiler (Clang 14+ or GCC 11+) and `make`. No other dependencies.
+
 ```bash
-make clean && make
+make                       # build/release/chess-engine
+make test                  # unit + UCI + HTTP integration tests (needs python3)
+make perft                 # full perft suite (640M leaf nodes, ~1-2 s)
+make bench                 # deterministic search benchmark
+make sanitize              # unit tests + bench under ASan/UBSan and TSan
+make tools                 # build/release/match and build/release/tune
+make frontend-test         # perft of the web demo's JS move generator (needs node)
 ```
-This compiles the project files (`main.cpp`, `Board.cpp`, `Move.cpp`, `MoveGen.cpp`, `Eval.cpp`, `Search.cpp`, `UCI.cpp`) into a single high-performance executable named `chess` with `-O2` optimizations.
 
-### 2. How to Start the Local HTTP Server
-Run the compiled executable with the `--server` flag to launch the engine as a local API server:
+`make CONFIG=debug|asan|tsan` selects other build configurations, and
+`make ARCH=native` tunes for the host CPU.
+
+## Using it
+
+The engine speaks UCI on stdin/stdout. Point any UCI GUI (Cute Chess, Arena,
+BanksiaGUI, En Croissant, ...) at `build/release/chess-engine`, or talk to it directly:
+
+```text
+$ build/release/chess-engine
+position startpos moves e2e4
+go depth 10
+info depth 1 seldepth 3 multipv 1 score cp -10 nodes 28 nps 28000 hashfull 0 time 0 pv d7d5
+...
+info depth 10 seldepth 19 multipv 1 score cp -28 nodes 16050 nps 1337500 hashfull 11 time 12 pv d7d5 e4d5 g8f6 ...
+bestmove d7d5 ponder e4d5
+```
+
+Extra console commands: `d` (show the board), `eval` (static evaluation),
+`perft <depth>` (divided perft).
+
+### Browser demo
+
 ```bash
-./chess --server --port 8765
+build/release/chess-engine serve           # engine API on http://127.0.0.1:8765, localhost only
+python3 -m http.server -d frontend 8000    # then open http://localhost:8000
 ```
-This spins up a lightweight TCP server using macOS-native BSD sockets, listening for HTTP `POST /move` payloads containing JSON FEN states (e.g. `{"fen": "rnbqk..."}`). It responds with JSON moves (e.g. `{"move": "e2e4"}`) and handles CORS headers automatically.
 
-### 3. How to Open the UI in a Browser
-Open `frontend/index.html` directly in any browser (Safari, Chrome, Firefox). No build step, node modules, or external web servers are required.
-- **Opponent Modes**: Choose **C++ Local Server** to play against the compiled C++ AI, or **JS Fallback Engine** to play offline (it runs a random move picker based on a complete rules validator written in vanilla JS).
-- **Game Analyser**: At any point, toggle the "Game Analyser" to browse historical moves without breaking the live engine state.
+The page sends the whole game (`startpos moves ...`) to the engine, so it sees
+repetitions. The server checks every move, caps think time and request size,
+and returns CORS headers only to local origins.
 
----
+## Measuring strength
 
-## Resume / CV: Algorithms, Features & Data Structures
+```bash
+make tools
+build/release/match \
+  --engine1 build/release/chess-engine --name1 new \
+  --engine2 path/to/other-engine      --name2 base \
+  --tc 8+0.08 --concurrency 8 --openings tools/match/openings.epd \
+  --sprt 0 10 --games 4000
+```
 
-Here is the complete list of technical concepts implemented in this engine (playing at roughly **~2000 Elo**):
+Games are played in colour-reversed pairs from 1,000 balanced openings
+(generated by `chess-engine openings`). Results are reported as Elo with a
+95% interval from pentanomial (game-pair) statistics. With `--sprt elo0 elo1`,
+the run stops as soon as the sequential probability ratio test accepts either
+hypothesis. Rules are adjudicated by the engine's own verified move generator,
+so the runner can referee any two UCI engines.
 
-### 1. Frontend Architecture & UI Design
-- **Vanilla JS Engine Integration**: Completely dependency-free frontend using a lightweight 3-column CSS Grid architecture.
-- **Alien Theme Aesthetics**: Hand-crafted SVG vectors dynamically rendered via Data URIs, deep space CSS variables, and glowing borders, providing a premium, alien-themed UX without external asset loading.
-- **Interactive Game Analyser**: Built-in state machine allowing users to rewind the board visually by clicking through the Move History log. Integrates cleanly with live engine evaluation states.
+## Tuning the evaluation
 
-### 2. Board Representation & State
-- **64-bit Bitboards**: Maps the layout of each piece type and color to a `uint64_t` bitmask. Allows ultra-fast bitwise operations to check occupancy and attacks.
-- **Incremental Zobrist Hashing**: Encodes the board layout, active player, castling rights, and en passant file into a single 64-bit hash. Maintained incrementally during moves via `XOR` operations to achieve high cache efficiency.
-- **FEN Parser/Generator**: Full string serialization to ingest FEN inputs (e.g., for puzzle solving) and output current state strings for network transmission.
+```bash
+build/release/chess-engine datagen --games 40000 --nodes 5000 --threads 10 --out data/games.txt
+build/release/tune --data data/games.txt --out src/engine/eval_params.cpp
+make && build/release/match ... --sprt 0 10      # accept only if it gains Elo
+```
 
-### 3. Move Generation (Perfect Legality)
-- **Magic Bitboards**: Implements bishop, rook, and queen sliding attacks by multiplying diagonal/file occupancy masks by pre-verified magic numbers and shifting to index precomputed lookup tables (size: ~107KB total).
-- **Attack Lookup Tables**: Precomputed lookup bitboards for Knights and King generated at startup to perform instant attack checks.
-- **Move Legality Filtering**: Generates pseudo-legal moves, executes them, verifies that the moving side's king is not attacked (`is_square_attacked`), and reverts. This ensures 100% legal moves under checkmate, stalemate, and pins. Passes standard correctness perfts (`4,865,609` nodes at Depth 5 on starting FEN).
+`datagen` games are deterministic per seed. The tuner fits Texel's logistic
+model with Adam, using exact gradients over the engine's real evaluation (a
+unit test checks that the tuner's linear model and the evaluation agree on
+every position). It keeps the weights from the best epoch on a held-out
+validation split, and leaves weights with too little phase-weighted support at
+their prior value instead of fitting them to noise.
 
-### 4. Positional Evaluation Heuristics
-- **Material Evaluation**: Centipawn weights (Pawn: 100, Knight: 320, Bishop: 330, Rook: 500, Queen: 900, King: 20000).
-- **Piece-Square Tables (PST)**: Coordinates positional scores dynamically. Mirrors Black's coordinates vertically via a fast rank-flipping bitmask (`sq ^ 56`).
-- **Pawn Structure Checkers**: Detects and penalizes doubled pawns (`-15` per file) and isolated pawns (`-20` per pawn with no neighbors).
-- **Bishop Positioning**: Trapped bishops (A7/H7/A2/H2 blocked by pawns) are heavily penalized (`-150`), and diagonal controls (A1-H8, H1-A8) are rewarded (`+10`).
-- **Rook Positioning**: Rooks placed on fully open files get `+25`, semi-open files get `+15`, and the 7th rank gets `+30`.
-- **King Safety**: Middlegame shield checking (penalizes `-20` per missing pawn in front of castled kings). Transition to endgame toggles a centralized King PST.
-- **Mobility Counting**: Calculates the maneuverability of pieces using static bit-counting approximations (`__builtin_popcountll` on pseudo-legal attack bitboards) resulting in up to a **50x speedup** in evaluation throughput over traditional move generation counting.
+## Repository layout
 
-### 5. Search Optimizations
-- **Iterative Deepening**: Progressively searches from Depth 1 up to target depth. Allows real-time search statistics printing and populates the Transposition Table early to guide deeper searches.
-- **Negamax with Alpha-Beta Pruning**: Prunes unpromising branches early using alpha/beta bounds.
-- **Null Move Pruning (NMP)**: Forfeits the turn to simulate a "null move"; if the resulting evaluation still causes a beta cutoff, the branch is entirely pruned, vastly increasing search depth in solid positions.
-- **Late Move Reductions (LMR)**: Assumes that quiet moves explored late in the move ordering are less likely to be best. Searches these moves at a reduced depth (`depth - 2`), reserving computational resources for tactical lines.
-- **Quiescence Search**: Extends search on capture moves past depth 0 to avoid the "horizon effect" and stabilize the static evaluation.
-- **Transposition Table (TT)**: Stores game states in a power-of-2 sized vector of exactly **1,048,576 entries** (24MB). Implements depth-preferred replacement and absolute-to-ply-relative mate score translations.
-- **Move Ordering**: Sorts moves using selection sort on the fly to maximize cutoffs: TT move > captures (MVV-LVA) > promotions > killer moves (quiet moves causing cutoffs) > history heuristic.
-- **Time Controller**: Periodic polling of the system clock (every 2,048 nodes) to abort search immediately when time limits are reached.
+```
+src/core/       rules: types, bitboards, position, legal move generation
+src/engine/     evaluation (+ generated weights), transposition table, search
+src/uci/        UCI protocol
+src/app/        bench / perft / datagen / openings / serve subcommands
+tools/match/    match runner with SPRT, opening suite
+tools/tune/     Texel tuner
+tests/          unit tests, perft data, UCI / HTTP / frontend integration tests
+frontend/       single-page browser demo
+docs/           design notes, audit of v1, measured results
+```
 
-### 6. Server Architecture
-- **BSD Socket HTTP Server**: Custom low-level socket listening, request buffering, HTTP header parsing, and CORS pre-flight handshake (`OPTIONS` method) handling. Resolves FEN queries synchronously and returns JSON payload responses.
+## Limitations
 
----
-
-## Benchmarking
-
-Measured on a modern CPU (single thread, `-O2`, 24MB TT). Each optimization was built and benchmarked in isolation so the performance gains are strictly attributable:
-
-| build | change | nodes to depth 8 | time | nodes/sec |
-| :--- | :--- | :--- | :--- | :--- |
-| baseline | alpha-beta + quiescence | 7,835,509 | 1.80s | 4,355,480 |
-| v1 | + transposition table & Zobrist | 2,122,992 | 0.57s | 3,724,547 |
-| v2 | + null-move pruning & LMR | 213,521 | 0.08s | 2,737,448 |
-
-**22.5x faster to the same search depth** (36.7x fewer nodes). The `nodes/sec` slightly drops as advanced heuristics (like TT probing and NMP/LMR logic) add per-node overhead, but the overall search time drastically decreases because the search tree size shrinks exponentially.
-
-Strength, from 100-game matches at 10s+0.1s vs. Stockfish 16 (handicapped via `UCI_Elo`), colour-balanced with a standard opening book:
-
-| metric | result |
-| :--- | :--- |
-| baseline rating | ~1750–1850 |
-| current rating | **~2160** — 44.5% vs. Stockfish @2200 (+43 −54 =3) |
-| null-move pruning, direct A/B | **+117 Elo** [+77, +161] over 200 games, LOS 100% |
-| move-match vs. Stockfish | 37.4% at matched depth 8 (a diagnostic, not a strength metric) |
+* **No absolute rating.** No calibrated reference engine (e.g. Stockfish with
+  `UCI_Elo`) was available on the development machine, so every Elo figure
+  here is *relative*: between versions of this engine, or against version 1.
+  The "~2000–2160 Elo" figures in the old README were unsupported and have
+  been dropped. A calibration run is one command once a reference engine is
+  installed (see [docs/RESULTS.md](docs/RESULTS.md)).
+* **Hand-crafted evaluation.** The weights are fitted to data, but the feature
+  set is classical. The tuning data is self-play at 5,000 nodes per move,
+  with decided games adjudicated early. As a result, material advantages are
+  worth noticeably more in the middlegame than in the endgame (a queen: +1303
+  vs +848 cp), which discourages simplifying when ahead. A second tuning round
+  made this worse and was rejected ([RESULTS.md §8](docs/RESULTS.md)).
+  Regenerating data without adjudication is the planned fix. An NNUE network
+  would be the next step in strength, but that is a different project.
+* **Standard chess only**: no Chess960, pondering, MultiPV, or endgame
+  tablebases.
+* `tools/match` and `serve` use POSIX APIs (fork/exec, sockets). The engine
+  itself is portable C++20, but only macOS was tested locally. CI for Linux
+  GCC/Clang is configured but has not been run from this repository yet.
+* Lazy SMP is simple, and its scaling was only measured up to 4 threads.

@@ -1,9 +1,13 @@
-# Compiled objects and binaries
+# Build output
 build/
-chess
 *.o
+*.d
 
-# OS generated files
+# Generated data (self-play games, tuning sets, match logs)
+/data/
+*.log
+
+# OS / editor files
 .DS_Store
 .DS_Store?
 ._*
@@ -11,3 +15,5 @@ chess
 .Trashes
 ehthumbs.db
 Thumbs.db
+.vscode/
+.idea/
