@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }} / ${{ matrix.cxx }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, cxx: g++ }
+          - { os: ubuntu-latest, cxx: clang++ }
+          - { os: macos-latest, cxx: clang++ }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build engine and tools
+        run: make -j4 all tools CXX=${{ matrix.cxx }}
+      - name: Unit tests
+        run: make unit-test CXX=${{ matrix.cxx }}
+      - name: UCI integration tests
+        run: make uci-test CXX=${{ matrix.cxx }}
+      - name: Perft suite (full depth)
+        run: make perft CXX=${{ matrix.cxx }}
+      - name: Bench
+        run: make bench CXX=${{ matrix.cxx }}
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # ThreadSanitizer cannot map its shadow memory with the high ASLR
+      # entropy used by recent Ubuntu kernels.
+      - name: Reduce ASLR entropy for TSan
+        run: sudo sysctl vm.mmap_rnd_bits=28
+      - name: ASan + UBSan + TSan
+        run: make sanitize CXX=clang++
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Frontend move generator perft
+        run: node tests/integration/frontend_perft.js
